@@ -26,11 +26,24 @@ export default function EmpleadosPage() {
   const [companias, setCompanias] = useState<Compania[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Permisos basados en rol y ciudad (misma lógica del backend)
+  const isAdminMedellin = user?.rol === 'ADMIN' && user?.compania_id === 2;
+  const isUsuarioBogota = user?.rol === 'USUARIO' && user?.compania_id === 1;
+  const canPatch = !isAdminMedellin;   // Admin Medellín NO puede hacer PATCH
+  const canDelete = !isUsuarioBogota;  // Usuario Bogotá NO puede hacer DELETE
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ id: 0, nombre: '', apellido: '', correo: '', cargo: '', salario: 0, compania_id: 0 });
   const [isEditing, setIsEditing] = useState(false);
+
+  // Patch modal state
+  const [isPatchModalOpen, setIsPatchModalOpen] = useState(false);
+  const [patchData, setPatchData] = useState({ id: 0, cargo: '' });
+
+  // Delete confirm state
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: number }>({ open: false, id: 0 });
 
   useEffect(() => {
     fetchData();
@@ -101,24 +114,40 @@ export default function EmpleadosPage() {
     }
   };
 
-  const handlePartialUpdate = async (id: number) => {
-    const newCargo = prompt('Introduce el nuevo cargo:');
-    if (!newCargo) return;
+  const openPatchModal = (empleado: Empleado) => {
+    setPatchData({ id: empleado.id, cargo: empleado.cargo });
+    setError('');
+    setIsPatchModalOpen(true);
+  };
+
+  const handlePartialUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
     try {
-      await api.patch(`/empleados/${id}`, { cargo: newCargo });
+      await api.patch(`/empleados/${patchData.id}`, { cargo: patchData.cargo });
       fetchData();
+      setIsPatchModalOpen(false);
     } catch (err: any) {
-      alert(err.response?.data?.message || err.response?.data?.error || 'Error en actualización parcial (PATCH).');
+      if (err.response?.data?.errores) {
+        const errorDetails = err.response.data.errores.map((e: any) => `${e.campo}: ${e.detalle}`).join(', ');
+        setError(`Errores de validación: ${errorDetails}`);
+      } else {
+        setError(err.response?.data?.message || err.response?.data?.error || err.response?.data?.mensaje || 'Error en actualización parcial (PATCH).');
+      }
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('¿Estás seguro de eliminar este empleado?')) {
-      try {
-        await api.delete(`/empleados/${id}`);
-        fetchData();
-      } catch (err: any) {
-        alert(err.response?.data?.message || err.response?.data?.error || 'Error al eliminar el empleado (Posible falta de permisos).');
+    try {
+      await api.delete(`/empleados/${id}`);
+      fetchData();
+      setDeleteConfirm({ open: false, id: 0 });
+    } catch (err: any) {
+      setDeleteConfirm({ open: false, id: 0 });
+      if (err.response?.data?.errores) {
+        const errorDetails = err.response.data.errores.map((e: any) => `${e.campo}: ${e.detalle}`).join(', ');
+        setError(`Errores de validación: ${errorDetails}`);
+      } else {
+        setError(err.response?.data?.message || err.response?.data?.error || err.response?.data?.mensaje || 'Error al eliminar el empleado.');
       }
     }
   };
@@ -190,13 +219,22 @@ export default function EmpleadosPage() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button 
-                        onClick={() => handlePartialUpdate(e.id)}
-                        className="text-[10px] uppercase font-bold tracking-wider text-purple-600 hover:bg-purple-50 px-2 py-1.5 rounded-lg transition-colors border border-purple-100 mr-1"
-                        title="Actualización Parcial (PATCH)"
-                      >
-                        Patch
-                      </button>
+                      {canPatch ? (
+                        <button 
+                          onClick={() => openPatchModal(e)}
+                          className="text-[10px] uppercase font-bold tracking-wider text-purple-600 hover:bg-purple-50 px-2 py-1.5 rounded-lg transition-colors border border-purple-100 mr-1"
+                          title="Actualización Parcial (PATCH)"
+                        >
+                          Patch
+                        </button>
+                      ) : (
+                        <span 
+                          className="text-[10px] uppercase font-bold tracking-wider text-slate-300 px-2 py-1.5 rounded-lg border border-slate-100 mr-1 cursor-not-allowed"
+                          title="No tienes permiso para PATCH (Admin Medellín)"
+                        >
+                          Patch
+                        </span>
+                      )}
                       <button 
                         onClick={() => openModal(e)}
                         className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -204,13 +242,22 @@ export default function EmpleadosPage() {
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      <button 
-                        onClick={() => handleDelete(e.id)}
-                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Eliminar"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {canDelete ? (
+                        <button 
+                          onClick={() => setDeleteConfirm({ open: true, id: e.id })}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <span
+                          className="p-2 text-slate-200 cursor-not-allowed"
+                          title="No tienes permiso para eliminar (Usuario Bogotá)"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </span>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -325,6 +372,71 @@ export default function EmpleadosPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Patch Modal */}
+      {isPatchModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-200">
+            <h2 className="text-xl font-bold text-slate-900 mb-2">Modificación Parcial (PATCH)</h2>
+            <p className="text-sm text-slate-500 mb-6">Solo se actualizará el campo de cargo del empleado.</p>
+            <form onSubmit={handlePartialUpdate} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Nuevo Cargo</label>
+                <input
+                  type="text"
+                  value={patchData.cargo}
+                  onChange={(e) => setPatchData({...patchData, cargo: e.target.value})}
+                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all"
+                  required
+                  autoFocus
+                />
+              </div>
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsPatchModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm shadow-purple-500/20"
+                >
+                  Aplicar PATCH
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm Modal */}
+      {deleteConfirm.open && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-200 text-center">
+            <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-7 h-7 text-red-600" />
+            </div>
+            <h2 className="text-xl font-bold text-slate-900 mb-2">¿Eliminar empleado?</h2>
+            <p className="text-sm text-slate-500 mb-6">Esta acción no se puede deshacer.</p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={() => setDeleteConfirm({ open: false, id: 0 })}
+                className="px-5 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDelete(deleteConfirm.id)}
+                className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors shadow-sm shadow-red-500/20"
+              >
+                Sí, eliminar
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -14,8 +14,13 @@ interface Compania {
 
 export default function CompaniasPage() {
   const { user } = useAuth();
-  const [companias, setCompanias] = useState<Compania[]>([]);
+  // Permisos basados en rol
+  const isAdmin = user?.rol === 'ADMIN';
+  // Puedes expandir con lógica de ciudad si fuera necesario
+
+
   const [loading, setLoading] = useState(true);
+  const [companias, setCompanias] = useState<Compania[]>([]);
   const [error, setError] = useState('');
   
   // Modal state
@@ -145,13 +150,22 @@ export default function CompaniasPage() {
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      <button 
+{isAdmin ? (
+                      <button
                         onClick={() => handleDelete(c.id)}
                         className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         title="Eliminar"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
+                    ) : (
+                      <span
+                        className="p-2 text-slate-200 cursor-not-allowed"
+                        title="No tienes permiso para eliminar compañías"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </span>
+                    )}
                     </div>
                   </td>
                 </tr>

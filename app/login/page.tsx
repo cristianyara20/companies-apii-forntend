@@ -31,8 +31,15 @@ export default function LoginPage() {
       const profileRes = await api.get('/auth/perfil', {
         headers: { Authorization: `Bearer ${token}` }
       });
+
+      // Deducir ciudad desde compania_id (misma lógica del backend)
+      const userData = profileRes.data;
+      let ciudad = 'Global';
+      if (userData.compania_id === 1) ciudad = 'Bogotá';
+      else if (userData.compania_id === 2) ciudad = 'Medellín';
+      else if (userData.compania_id === 3) ciudad = 'Cali';
       
-      login(token, profileRes.data);
+      login(token, { ...userData, ciudad });
     } catch (err: any) {
       setError(err.response?.data?.error || 'Error al iniciar sesión. Verifica tus credenciales.');
     } finally {
