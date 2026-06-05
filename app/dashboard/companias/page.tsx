@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, Edit2, Trash2, Building2, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Building2, Loader2, AlertCircle, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Compania {
   id: number;
@@ -14,14 +14,32 @@ interface Compania {
 
 export default function CompaniasPage() {
   const { user } = useAuth();
-  // Permisos basados en rol
-  const isAdmin = user?.rol === 'ADMIN';
-  // Puedes expandir con lógica de ciudad si fuera necesario
+  // Permisos basados en ciudad
+  const isBogota = user?.compania_id === 1;
+  const isMedellin = user?.compania_id === 2;
+  const canPut = !isMedellin;     // Medellín NO puede PUT
+  const canDelete = !isBogota;    // Bogotá NO puede DELETE
 
 
   const [loading, setLoading] = useState(true);
   const [companias, setCompanias] = useState<Compania[]>([]);
   const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
+  const filteredCompanias = companias.filter(c => 
+    c.id.toString().includes(searchTerm) ||
+    c.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.direccion.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const totalPages = Math.ceil(filteredCompanias.length / itemsPerPage) || 1;
+  const paginatedCompanias = filteredCompanias.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -115,6 +133,21 @@ export default function CompaniasPage() {
         </button>
       </div>
 
+      <div className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="relative flex-1 max-w-md">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-slate-400" />
+          </div>
+          <input
+            type="text"
+            placeholder="Buscar por ID, nombre o dirección..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-all"
+          />
+        </div>
+      </div>
+
       {error && (
         <div className="bg-red-50 text-red-500 p-4 rounded-xl border border-red-100 flex items-center gap-2 text-sm">
           <AlertCircle className="w-5 h-5" />
@@ -135,7 +168,7 @@ export default function CompaniasPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {companias.map((c) => (
+              {paginatedCompanias.map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-6 py-4 text-sm font-medium text-slate-900">#{c.id}</td>
                   <td className="px-6 py-4 text-sm font-medium text-slate-900">{c.nombre}</td>
@@ -143,25 +176,34 @@ export default function CompaniasPage() {
                   <td className="px-6 py-4 text-sm text-slate-500">{c.telefono}</td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button 
-                        onClick={() => openModal(c)}
-                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Editar"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-{isAdmin ? (
+                      {canPut ? (
+                        <button 
+                          onClick={() => openModal(c)}
+                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Editar (PUT)"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <span
+                          className="p-2 text-slate-200 cursor-not-allowed"
+                          title="No tienes permiso para editar (Medellín)"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </span>
+                      )}
+{canDelete ? (
                       <button
                         onClick={() => handleDelete(c.id)}
                         className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Eliminar"
+                        title="Eliminar (DELETE)"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     ) : (
                       <span
                         className="p-2 text-slate-200 cursor-not-allowed"
-                        title="No tienes permiso para eliminar compañías"
+                        title="No tienes permiso para eliminar (Bogotá)"
                       >
                         <Trash2 className="w-4 h-4" />
                       </span>
@@ -170,16 +212,41 @@ export default function CompaniasPage() {
                   </td>
                 </tr>
               ))}
-              {companias.length === 0 && (
+              {paginatedCompanias.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center text-slate-500 text-sm">
-                    No hay compañías registradas
+                    No se encontraron compañías
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+        
+        {/* Paginación */}
+        {totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between bg-slate-50">
+            <div className="text-sm text-slate-500">
+              Mostrando página <span className="font-medium text-slate-900">{currentPage}</span> de <span className="font-medium text-slate-900">{totalPages}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal */}

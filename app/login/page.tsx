@@ -126,7 +126,13 @@ export default function LoginPage() {
             </button>
           </form>
           
-          <div className="mt-8 text-center border-t border-slate-800/60 pt-6">
+          <div className="mt-8 text-center border-t border-slate-800/60 pt-6 space-y-4">
+            <p className="text-slate-400 text-sm">
+              ¿No tienes cuenta?{' '}
+              <a href="/registro" className="text-emerald-400 hover:text-emerald-300 font-medium transition-colors">
+                Regístrate aquí
+              </a>
+            </p>
             <p className="text-slate-500 text-xs">
               Usa <span className="text-slate-300 font-medium">admin@innovatech.com / Admin123*</span> (Admin Medellín)
               <br />

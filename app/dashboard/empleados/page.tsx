@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, Edit2, Trash2, Users, Loader2, AlertCircle, Building2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Users, Loader2, AlertCircle, Building2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Empleado {
   id: number;
@@ -27,12 +27,39 @@ export default function EmpleadosPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Permisos basados en rol y ciudad (misma lógica del backend)
-  const isAdminMedellin = user?.rol === 'ADMIN' && user?.compania_id === 2;
-  const isUsuarioBogota = user?.rol === 'USUARIO' && user?.compania_id === 1;
-  const canPatch = !isAdminMedellin;   // Admin Medellín NO puede hacer PATCH
-  const canDelete = !isUsuarioBogota;  // Usuario Bogotá NO puede hacer DELETE
+  // Permisos basados en ciudad (misma lógica del backend)
+  const isBogota = user?.compania_id === 1;
+  const isMedellin = user?.compania_id === 2;
+  const canPut = !isMedellin;     // Medellín NO puede PUT
+  const canPatch = !isMedellin;   // Medellín NO puede PATCH
+  const canDelete = !isBogota;    // Bogotá NO puede DELETE
   
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
+  const getCompaniaNombre = (id: number) => {
+    return companias.find(c => c.id === id)?.nombre || 'Desconocida';
+  };
+
+  const filteredEmpleados = empleados.filter(e => {
+    const compNombre = getCompaniaNombre(e.compania_id).toLowerCase();
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      e.id.toString().includes(searchLower) ||
+      e.nombre.toLowerCase().includes(searchLower) ||
+      e.apellido.toLowerCase().includes(searchLower) ||
+      compNombre.includes(searchLower)
+    );
+  });
+
+  const totalPages = Math.ceil(filteredEmpleados.length / itemsPerPage) || 1;
+  const paginatedEmpleados = filteredEmpleados.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ id: 0, nombre: '', apellido: '', correo: '', cargo: '', salario: 0, compania_id: 0 });
@@ -63,10 +90,6 @@ export default function EmpleadosPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const getCompaniaNombre = (id: number) => {
-    return companias.find(c => c.id === id)?.nombre || 'Desconocida';
   };
 
   const openModal = (empleado?: Empleado) => {
@@ -175,6 +198,21 @@ export default function EmpleadosPage() {
         </button>
       </div>
 
+      <div className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="relative flex-1 max-w-md">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-slate-400" />
+          </div>
+          <input
+            type="text"
+            placeholder="Buscar por ID, nombre, apellido o compañía..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 sm:text-sm transition-all"
+          />
+        </div>
+      </div>
+
       {error && (
         <div className="bg-red-50 text-red-500 p-4 rounded-xl border border-red-100 flex items-center gap-2 text-sm">
           <AlertCircle className="w-5 h-5" />
@@ -196,7 +234,7 @@ export default function EmpleadosPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {empleados.map((e) => (
+              {paginatedEmpleados.map((e) => (
                 <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-6 py-4 text-sm font-medium text-slate-900">#{e.id}</td>
                   <td className="px-6 py-4">
@@ -230,18 +268,27 @@ export default function EmpleadosPage() {
                       ) : (
                         <span 
                           className="text-[10px] uppercase font-bold tracking-wider text-slate-300 px-2 py-1.5 rounded-lg border border-slate-100 mr-1 cursor-not-allowed"
-                          title="No tienes permiso para PATCH (Admin Medellín)"
+                          title="No tienes permiso para PATCH (Medellín)"
                         >
                           Patch
                         </span>
                       )}
-                      <button 
-                        onClick={() => openModal(e)}
-                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Editar completo (PUT)"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
+                      {canPut ? (
+                        <button 
+                          onClick={() => openModal(e)}
+                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Editar completo (PUT)"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <span
+                          className="p-2 text-slate-200 cursor-not-allowed"
+                          title="No tienes permiso para editar (Medellín)"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </span>
+                      )}
                       {canDelete ? (
                         <button 
                           onClick={() => setDeleteConfirm({ open: true, id: e.id })}
@@ -262,16 +309,41 @@ export default function EmpleadosPage() {
                   </td>
                 </tr>
               ))}
-              {empleados.length === 0 && (
+              {paginatedEmpleados.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-slate-500 text-sm">
-                    No hay empleados registrados
+                    No se encontraron empleados
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+        
+        {/* Paginación */}
+        {totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between bg-slate-50">
+            <div className="text-sm text-slate-500">
+              Mostrando página <span className="font-medium text-slate-900">{currentPage}</span> de <span className="font-medium text-slate-900">{totalPages}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal */}
